@@ -1,4 +1,5 @@
 import 'package:get/get.dart';
+
 import '../features/splash/presentation/bindings/splash_binding.dart';
 import '../features/splash/presentation/screens/splash_screen.dart';
 import '../features/pin/presentation/bindings/pin_binding.dart';
@@ -7,6 +8,10 @@ import '../features/pin/presentation/screens/pin_verify_screen.dart';
 import '../features/pin/presentation/screens/pin_change_screen.dart';
 import '../features/home/presentation/bindings/home_binding.dart';
 import '../features/home/presentation/screens/home_screen.dart';
+import '../features/properties/presentation/bindings/property_binding.dart';
+import '../features/properties/presentation/screens/property_screen.dart';
+import '../features/tenants_contracts/presentation/bindings/tenant_contract_binding.dart';
+import '../features/tenants_contracts/presentation/screens/tenant_contract_screen.dart';
 import 'app_routes.dart';
 
 class AppPages {
@@ -37,6 +42,16 @@ class AppPages {
       name: AppRoutes.home,
       page: () => const HomeScreen(),
       binding: HomeBinding(),
+    ),
+    GetPage(
+      name: AppRoutes.properties,
+      page: () => const PropertyScreen(),
+      binding: PropertyBinding(),
+    ),
+    GetPage(
+      name: AppRoutes.tenantContracts,
+      page: () => const TenantContractScreen(),
+      binding: TenantContractBinding(),
     ),
   ];
 }

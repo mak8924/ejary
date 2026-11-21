@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../../../../routes/app_routes.dart';
 import '../controllers/home_controller.dart';
 
 class HomeScreen extends GetView<HomeController> {
@@ -8,6 +9,9 @@ class HomeScreen extends GetView<HomeController> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+
     return Scaffold(
       appBar: AppBar(
         title: Text('app_name'.tr),
@@ -23,10 +27,97 @@ class HomeScreen extends GetView<HomeController> {
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          Text('welcome'.tr, style: Theme.of(context).textTheme.headlineMedium),
+          Text('welcome'.tr, style: theme.textTheme.headlineMedium),
           const SizedBox(height: 8),
           Text('starter_message'.tr),
           const SizedBox(height: 24),
+
+          // PROPERTY MANAGEMENT
+          Card(
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: () => Get.toNamed(AppRoutes.properties),
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 30,
+                      backgroundColor: colors.primaryContainer,
+                      child: Icon(
+                        Icons.apartment,
+                        size: 32,
+                        color: colors.onPrimaryContainer,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Property Management',
+                            style: theme.textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Manage properties, departments and rental units.',
+                            style: theme.textTheme.bodyMedium,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.chevron_right),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // TENANTS AND CONTRACTS
+          Card(
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: () => Get.toNamed(AppRoutes.tenantContracts),
+              child: const Padding(
+                padding: EdgeInsets.all(20),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 30,
+                      child: Icon(Icons.people_alt_outlined, size: 30),
+                    ),
+                    SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Tenant & Contract Management',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          SizedBox(height: 6),
+                          Text(
+                            'Manage tenants, rental contracts and renewals.',
+                          ),
+                        ],
+                      ),
+                    ),
+                    Icon(Icons.chevron_right),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          // SECURITY MESSAGE
           Card(
             child: Padding(
               padding: const EdgeInsets.all(20),
@@ -34,12 +125,10 @@ class HomeScreen extends GetView<HomeController> {
                 children: [
                   CircleAvatar(
                     radius: 26,
-                    backgroundColor: Theme.of(
-                      context,
-                    ).colorScheme.primaryContainer,
+                    backgroundColor: colors.primaryContainer,
                     child: Icon(
                       Icons.shield_outlined,
-                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                      color: colors.onPrimaryContainer,
                     ),
                   ),
                   const SizedBox(width: 16),
@@ -48,9 +137,13 @@ class HomeScreen extends GetView<HomeController> {
               ),
             ),
           ),
+
           const SizedBox(height: 24),
-          Text('settings'.tr, style: Theme.of(context).textTheme.titleLarge),
+
+          // SETTINGS
+          Text('settings'.tr, style: theme.textTheme.titleLarge),
           const SizedBox(height: 12),
+
           Card(
             child: Column(
               children: [

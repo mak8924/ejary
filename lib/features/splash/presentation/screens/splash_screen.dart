@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -9,8 +8,9 @@ class SplashScreen extends GetView<SplashController> {
 
   @override
   Widget build(BuildContext context) {
-    // Accessing controller ensures GetX resolves the lazy dependency.
-    final splashController = controller;
+    // Accessing the controller triggers Get.lazyPut initialization.
+    // This allows onReady() to execute.
+    Get.find<SplashController>();
 
     return Scaffold(
       body: Center(
