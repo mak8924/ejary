@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:sqflite/sqflite.dart' show databaseFactory;
 import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 import 'package:get/get.dart';
@@ -11,12 +12,12 @@ import 'core/theme/app_theme.dart';
 import 'routes/app_pages.dart';
 import 'routes/app_routes.dart';
 
-
 Future<void> inspectEjaryDatabase() async {
   final db = LocalDatabase().database;
 
   debugPrint('========== EJARY DATABASE INSPECTION ==========');
-  debugPrint('Database version: ${await db.getVersion()}');
+  final versionResult = await db.rawQuery('PRAGMA user_version');
+  debugPrint('Database version: ${versionResult.first['user_version']}');
 
   final tables = await db.rawQuery("""
     SELECT name
@@ -38,27 +39,21 @@ Future<void> inspectEjaryDatabase() async {
         'Column: ${column['name']} | '
         'Type: ${column['type']} | '
         'Not Null: ${column['notnull']} | '
-        'Primary Key: ${column['pk']}'
+        'Primary Key: ${column['pk']}',
       );
     }
 
-    final count = await db.rawQuery(
-      'SELECT COUNT(*) AS total FROM "$table"'
-    );
+    final count = await db.rawQuery('SELECT COUNT(*) AS total FROM "$table"');
 
     debugPrint('RECORD COUNT: ${count.first['total']}');
 
-    final foreignKeys = await db.rawQuery(
-      'PRAGMA foreign_key_list("$table")'
-    );
+    final foreignKeys = await db.rawQuery('PRAGMA foreign_key_list("$table")');
 
     for (final fk in foreignKeys) {
       debugPrint('FOREIGN KEY: $fk');
     }
 
-    final indexes = await db.rawQuery(
-      'PRAGMA index_list("$table")'
-    );
+    final indexes = await db.rawQuery('PRAGMA index_list("$table")');
 
     for (final index in indexes) {
       debugPrint('INDEX: $index');
@@ -82,6 +77,8 @@ Future<void> main() async {
   final database = await LocalDatabase().init();
   Get.put<LocalDatabase>(database, permanent: true);
 
+  await inspectEjaryDatabase();
+
   final preferences = await PreferencesService().init();
   Get.put<PreferencesService>(preferences, permanent: true);
 
@@ -104,6 +101,18 @@ class StarterApp extends StatelessWidget {
       translations: AppTranslations(),
       locale: preferences.locale,
       fallbackLocale: const Locale('en', 'US'),
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+
+      supportedLocales: const [
+        Locale('en', 'US'),
+        Locale('ar', 'YE'),
+        Locale('en'),
+        Locale('ar'),
+      ],
       getPages: AppPages.pages,
       initialRoute: AppRoutes.splash,
     );

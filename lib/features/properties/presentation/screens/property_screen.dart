@@ -7,19 +7,77 @@ import '../controllers/property_controller.dart';
 class PropertyScreen extends GetView<PropertyController> {
   const PropertyScreen({super.key});
 
-  bool get isArabic => Get.locale?.languageCode == 'ar';
-  String trText(String en, String ar) => isArabic ? ar : en;
+  String _t(String key) => key.tr;
+
+  bool get _isArabic => Get.locale?.languageCode == 'ar';
+
+  String _message(String en, String ar) => _isArabic ? ar : en;
+
+  String _translatedValue(String value) {
+    final key = value.toLowerCase().trim();
+    const keys = {
+      'residential',
+      'commercial',
+      'apartment',
+      'shop',
+      'office',
+      'villa',
+      'other',
+      'available',
+      'occupied',
+      'rented',
+      'maintenance',
+      'unavailable',
+    };
+    return keys.contains(key) ? key.tr : value;
+  }
+
+  String? _required(String? value, String field) {
+    if (value == null || value.trim().isEmpty) {
+      return _message('$field is required.', 'مطلوب.');
+    }
+    return null;
+  }
+
+  String? _positiveNumber(
+    String? value,
+    String field, {
+    bool allowZero = false,
+  }) {
+    final number = double.tryParse((value ?? '').trim());
+    if (number == null ||
+        !number.isFinite ||
+        (allowZero ? number < 0 : number <= 0)) {
+      return allowZero
+          ? _message(
+              '$field must be zero or greater.',
+              '$field يجب أن يكون صفراً أو أكبر.',
+            )
+          : _message(
+              '$field must be greater than zero.',
+              '$field يجب أن يكون أكبر من صفر.',
+            );
+    }
+    return null;
+  }
+
+  String? _floorValidator(String? value) {
+    final floor = int.tryParse((value ?? '').trim());
+    if (floor == null || floor < 0) {
+      return _message(
+        'Enter a valid floor number (0 or greater).',
+        'أدخل رقم طابق صحيحاً (0 أو أكبر).',
+      );
+    }
+    return null;
+  }
 
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
       length: 2,
       child: Scaffold(
-        appBar: AppBar(
-          title: Text(
-            trText('Property Management', 'ط¥ط¯ط§ط±ط© ط§ظ„ط¹ظ‚ط§ط±ط§طھ'),
-          ),
-        ),
+        appBar: AppBar(title: Text(_t('properties_title'))),
         body: Obx(() {
           if (controller.isLoading.value && controller.properties.isEmpty) {
             return const Center(child: CircularProgressIndicator());
@@ -32,10 +90,7 @@ class PropertyScreen extends GetView<PropertyController> {
                 child: TextField(
                   onChanged: controller.searchProperties,
                   decoration: InputDecoration(
-                    hintText: trText(
-                      'Search properties...',
-                      'ط§ط¨ط­ط« ط¹ظ† ط¹ظ‚ط§ط±...',
-                    ),
+                    hintText: _t('search_properties'),
                     prefixIcon: const Icon(Icons.search),
                     border: const OutlineInputBorder(),
                   ),
@@ -44,14 +99,7 @@ class PropertyScreen extends GetView<PropertyController> {
               SizedBox(
                 height: 150,
                 child: controller.filteredProperties.isEmpty
-                    ? Center(
-                        child: Text(
-                          trText(
-                            'No properties yet',
-                            'ظ„ط§ طھظˆط¬ط¯ ط¹ظ‚ط§ط±ط§طھ ط¨ط¹ط¯',
-                          ),
-                        ),
-                      )
+                    ? Center(child: Text(_t('no_properties')))
                     : ListView.builder(
                         scrollDirection: Axis.horizontal,
                         padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -59,8 +107,9 @@ class PropertyScreen extends GetView<PropertyController> {
                         itemBuilder: (context, index) {
                           final property = controller.filteredProperties[index];
                           final selected =
+                              property.id != null &&
                               property.id ==
-                              controller.selectedProperty.value?.id;
+                                  controller.selectedProperty.value?.id;
 
                           return SizedBox(
                             width: 245,
@@ -87,6 +136,7 @@ class PropertyScreen extends GetView<PropertyController> {
                                           IconButton(
                                             visualDensity:
                                                 VisualDensity.compact,
+                                            tooltip: _t('edit'),
                                             icon: const Icon(
                                               Icons.edit_outlined,
                                             ),
@@ -96,18 +146,19 @@ class PropertyScreen extends GetView<PropertyController> {
                                           IconButton(
                                             visualDensity:
                                                 VisualDensity.compact,
+                                            tooltip: _t('delete'),
                                             icon: const Icon(
                                               Icons.delete_outline,
                                             ),
-                                            onPressed: () => _confirmDelete(
-                                              trText(
-                                                'Delete property?',
-                                                'ط­ط°ظپ ط§ظ„ط¹ظ‚ط§ط±طں',
-                                              ),
-                                              () => controller.removeProperty(
-                                                property.id!,
-                                              ),
-                                            ),
+                                            onPressed: property.id == null
+                                                ? null
+                                                : () => _confirmDelete(
+                                                    _t('delete_property_title'),
+                                                    () => controller
+                                                        .removeProperty(
+                                                          property.id!,
+                                                        ),
+                                                  ),
                                           ),
                                         ],
                                       ),
@@ -125,7 +176,7 @@ class PropertyScreen extends GetView<PropertyController> {
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                       ),
-                                      Text(property.type),
+                                      Text(_translatedValue(property.type)),
                                     ],
                                   ),
                                 ),
@@ -142,7 +193,7 @@ class PropertyScreen extends GetView<PropertyController> {
                   child: OutlinedButton.icon(
                     onPressed: () => _propertyDialog(),
                     icon: const Icon(Icons.add),
-                    label: Text(trText('Add Property', 'ط¥ط¶ط§ظپط© ط¹ظ‚ط§ط±')),
+                    label: Text(_t('add_property')),
                   ),
                 ),
               ),
@@ -150,10 +201,11 @@ class PropertyScreen extends GetView<PropertyController> {
               if (controller.selectedProperty.value == null)
                 Expanded(
                   child: Center(
-                    child: Text(
-                      trText(
-                        'Select a property to manage its departments and units.',
-                        'ط§ط®طھط± ط¹ظ‚ط§ط±ط§ظ‹ ظ„ط¥ط¯ط§ط±ط© ط£ظ‚ط³ط§ظ…ظ‡ ظˆظˆط­ط¯ط§طھظ‡.',
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Text(
+                        _t('select_property_message'),
+                        textAlign: TextAlign.center,
                       ),
                     ),
                   ),
@@ -177,8 +229,8 @@ class PropertyScreen extends GetView<PropertyController> {
                 ),
                 TabBar(
                   tabs: [
-                    Tab(text: trText('Departments', 'ط§ظ„ط£ظ‚ط³ط§ظ…')),
-                    Tab(text: trText('Units', 'ط§ظ„ظˆط­ط¯ط§طھ')),
+                    Tab(text: _t('departments')),
+                    Tab(text: _t('units')),
                   ],
                 ),
                 Expanded(
@@ -203,17 +255,13 @@ class PropertyScreen extends GetView<PropertyController> {
               child: FilledButton.icon(
                 onPressed: () => _departmentDialog(),
                 icon: const Icon(Icons.add),
-                label: Text(trText('Add Department', 'ط¥ط¶ط§ظپط© ظ‚ط³ظ…')),
+                label: Text(_t('add_department')),
               ),
             ),
           ),
           Expanded(
             child: controller.departments.isEmpty
-                ? Center(
-                    child: Text(
-                      trText('No departments', 'ظ„ط§ طھظˆط¬ط¯ ط£ظ‚ط³ط§ظ…'),
-                    ),
-                  )
+                ? Center(child: Text(_t('no_departments')))
                 : ListView.builder(
                     itemCount: controller.departments.length,
                     itemBuilder: (context, index) {
@@ -226,18 +274,21 @@ class PropertyScreen extends GetView<PropertyController> {
                           trailing: Wrap(
                             children: [
                               IconButton(
+                                tooltip: _t('edit'),
                                 icon: const Icon(Icons.edit_outlined),
                                 onPressed: () => _departmentDialog(item),
                               ),
                               IconButton(
+                                tooltip: _t('delete'),
                                 icon: const Icon(Icons.delete_outline),
-                                onPressed: () => _confirmDelete(
-                                  trText(
-                                    'Delete department?',
-                                    'ط­ط°ظپ ط§ظ„ظ‚ط³ظ…طں',
-                                  ),
-                                  () => controller.removeDepartment(item.id!),
-                                ),
+                                onPressed: item.id == null
+                                    ? null
+                                    : () => _confirmDelete(
+                                        _t('delete_department_title'),
+                                        () => controller.removeDepartment(
+                                          item.id!,
+                                        ),
+                                      ),
                               ),
                             ],
                           ),
@@ -262,43 +313,45 @@ class PropertyScreen extends GetView<PropertyController> {
               child: FilledButton.icon(
                 onPressed: () => _unitDialog(),
                 icon: const Icon(Icons.add),
-                label: Text(trText('Add Unit', 'ط¥ط¶ط§ظپط© ظˆط­ط¯ط©')),
+                label: Text(_t('add_unit')),
               ),
             ),
           ),
           Expanded(
             child: controller.units.isEmpty
-                ? Center(
-                    child: Text(trText('No units', 'ظ„ط§ طھظˆط¬ط¯ ظˆط­ط¯ط§طھ')),
-                  )
+                ? Center(child: Text(_t('no_units')))
                 : ListView.builder(
                     itemCount: controller.units.length,
                     itemBuilder: (context, index) {
                       final item = controller.units[index];
                       return Card(
                         child: ListTile(
+                          onTap: () => _showUnitDetails(item),
                           leading: const Icon(Icons.door_front_door_outlined),
-                          title: Text(
-                            '${trText('Unit', 'ظˆط­ط¯ط©')} ${item.number}',
-                          ),
+                          title: Text('${_t('unit')} ${item.number}'),
                           subtitle: Text(
-                            '${item.type} â€¢ ${item.rent.toStringAsFixed(2)} â€¢ ${item.status}',
+                            '${_translatedValue(item.type)}  _  '
+                            '${item.rent.toStringAsFixed(2)}  _  '
+                            '${_translatedValue(item.status)}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                           trailing: Wrap(
                             children: [
                               IconButton(
+                                tooltip: _t('edit'),
                                 icon: const Icon(Icons.edit_outlined),
                                 onPressed: () => _unitDialog(item),
                               ),
                               IconButton(
+                                tooltip: _t('delete'),
                                 icon: const Icon(Icons.delete_outline),
-                                onPressed: () => _confirmDelete(
-                                  trText(
-                                    'Delete unit?',
-                                    'ط­ط°ظپ ط§ظ„ظˆط­ط¯ط©طں',
-                                  ),
-                                  () => controller.removeUnit(item.id!),
-                                ),
+                                onPressed: item.id == null
+                                    ? null
+                                    : () => _confirmDelete(
+                                        _t('delete_unit_title'),
+                                        () => controller.removeUnit(item.id!),
+                                      ),
                               ),
                             ],
                           ),
@@ -312,232 +365,393 @@ class PropertyScreen extends GetView<PropertyController> {
     );
   }
 
-  void _propertyDialog([PropertyEntity? item]) {
+  void _showUnitDetails(UnitEntity item) {
+    Get.bottomSheet(
+      SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '${_t('unit')} ${item.number}',
+                  style: Get.textTheme.titleLarge,
+                ),
+                const Divider(),
+                _detailRow(_t('unit_type'), _translatedValue(item.type)),
+                _detailRow(_t('floor'), item.floor.toString()),
+                _detailRow(_t('area'), item.area.toString()),
+                _detailRow(_t('monthly_rent'), item.rent.toStringAsFixed(2)),
+                _detailRow(_t('availability'), _translatedValue(item.status)),
+                _detailRow(_t('description'), item.description),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: () {
+                      Get.back();
+                      _unitDialog(item);
+                    },
+                    icon: const Icon(Icons.edit),
+                    label: Text(_t('edit')),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      isScrollControlled: true,
+      backgroundColor: Get.theme.colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+    );
+  }
+
+  Widget _detailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 7),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            flex: 2,
+            child: Text(
+              label,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
+          Expanded(flex: 3, child: Text(value.isEmpty ? '_' : value)),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _propertyDialog([PropertyEntity? item]) async {
+    final formKey = GlobalKey<FormState>();
     final name = TextEditingController(text: item?.name ?? '');
-    final type = TextEditingController(text: item?.type ?? 'residential');
     final address = TextEditingController(text: item?.address ?? '');
     final description = TextEditingController(text: item?.description ?? '');
+    String type = item?.type ?? 'residential';
 
-    Get.dialog(
-      AlertDialog(
-        title: Text(
-          trText(
-            item == null ? 'New Property' : 'Edit Property',
-            item == null ? 'ط¹ظ‚ط§ط± ط¬ط¯ظٹط¯' : 'طھط¹ط¯ظٹظ„ ط§ظ„ط¹ظ‚ط§ط±',
-          ),
-        ),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _field(name, trText('Property name *', 'ط§ط³ظ… ط§ظ„ط¹ظ‚ط§ط± *')),
-              _field(
-                type,
-                trText(
-                  'Type (residential/commercial)',
-                  'ط§ظ„ظ†ظˆط¹ (ط³ظƒظ†ظٹ/طھط¬ط§ط±ظٹ)',
-                ),
-              ),
-              _field(address, trText('Address', 'ط§ظ„ط¹ظ†ظˆط§ظ†')),
-              _field(description, trText('Description', 'ط§ظ„ظˆطµظپ')),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: Get.back,
-            child: Text(trText('Cancel', 'ط¥ظ„ط؛ط§ط،')),
-          ),
-          FilledButton(
-            onPressed: () {
-              if (name.text.trim().isEmpty) return;
-              Get.back();
-              controller.saveProperty(
-                PropertyEntity(
-                  id: item?.id,
-                  name: name.text.trim(),
-                  type: type.text.trim(),
-                  address: address.text.trim(),
-                  description: description.text.trim(),
-                ),
-              );
-            },
-            child: Text(trText('Save', 'ط­ظپط¸')),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _departmentDialog([DepartmentEntity? item]) {
-    final propertyId = controller.selectedProperty.value!.id!;
-    final name = TextEditingController(text: item?.name ?? '');
-    final description = TextEditingController(text: item?.description ?? '');
-
-    Get.dialog(
-      AlertDialog(
-        title: Text(trText('Department', 'ط§ظ„ظ‚ط³ظ…')),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _field(name, trText('Department name *', 'ط§ط³ظ… ط§ظ„ظ‚ط³ظ… *')),
-            _field(description, trText('Description', 'ط§ظ„ظˆطµظپ')),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: Get.back,
-            child: Text(trText('Cancel', 'ط¥ظ„ط؛ط§ط،')),
-          ),
-          FilledButton(
-            onPressed: () {
-              if (name.text.trim().isEmpty) return;
-              Get.back();
-              controller.saveDepartment(
-                DepartmentEntity(
-                  id: item?.id,
-                  propertyId: propertyId,
-                  name: name.text.trim(),
-                  description: description.text.trim(),
-                ),
-              );
-            },
-            child: Text(trText('Save', 'ط­ظپط¸')),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _unitDialog([UnitEntity? item]) {
-    final propertyId = controller.selectedProperty.value!.id!;
-    final number = TextEditingController(text: item?.number ?? '');
-    final type = TextEditingController(text: item?.type ?? 'apartment');
-    final floor = TextEditingController(text: '${item?.floor ?? 0}');
-    final area = TextEditingController(text: '${item?.area ?? 0}');
-    final rent = TextEditingController(text: '${item?.rent ?? 0}');
-    final description = TextEditingController(text: item?.description ?? '');
-    int? departmentId = item?.departmentId;
-    String status = item?.status ?? 'available';
-
-    Get.dialog(
-      StatefulBuilder(
-        builder: (context, setState) {
-          return AlertDialog(
-            title: Text(trText('Unit details', 'ط¨ظٹط§ظ†ط§طھ ط§ظ„ظˆط­ط¯ط©')),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _field(
-                    number,
-                    trText('Unit number *', 'ط±ظ‚ظ… ط§ظ„ظˆط­ط¯ط© *'),
-                  ),
-                  _field(type, trText('Unit type', 'ظ†ظˆط¹ ط§ظ„ظˆط­ط¯ط©')),
-                  _field(floor, trText('Floor', 'ط§ظ„ط·ط§ط¨ظ‚'), numeric: true),
-                  _field(area, trText('Area', 'ط§ظ„ظ…ط³ط§ط­ط©'), numeric: true),
-                  _field(
-                    rent,
-                    trText('Monthly rent', 'ط§ظ„ط¥ظٹط¬ط§ط± ط§ظ„ط´ظ‡ط±ظٹ'),
-                    numeric: true,
-                  ),
-                  DropdownButtonFormField<int?>(
-                    initialValue: departmentId,
-                    isExpanded: true,
-                    decoration: InputDecoration(
-                      labelText: trText(
-                        'Department (optional)',
-                        'ط§ظ„ظ‚ط³ظ… (ط§ط®طھظٹط§ط±ظٹ)',
-                      ),
+    try {
+      await Get.dialog<void>(
+        StatefulBuilder(
+          builder: (context, setState) => AlertDialog(
+            title: Text(
+              item == null ? _t('new_property') : _t('edit_property'),
+            ),
+            content: Form(
+              key: formKey,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _formField(
+                      name,
+                      _t('property_name_required'),
+                      validator: (v) =>
+                          _required(v, _t('property_name_required')),
                     ),
-                    items: [
-                      DropdownMenuItem<int?>(
-                        value: null,
-                        child: Text(trText('No department', 'ط¨ط¯ظˆظ† ظ‚ط³ظ…')),
+                    DropdownButtonFormField<String>(
+                      initialValue: type,
+                      isExpanded: true,
+                      decoration: InputDecoration(
+                        labelText: _t('property_type_hint'),
+                        border: const OutlineInputBorder(),
                       ),
-                      ...controller.departments.map(
-                        (d) => DropdownMenuItem<int?>(
-                          value: d.id,
-                          child: Text(d.name),
-                        ),
-                      ),
-                    ],
-                    onChanged: (value) => setState(() => departmentId = value),
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    initialValue: status,
-                    decoration: InputDecoration(
-                      labelText: trText(
-                        'Availability',
-                        'ط­ط§ظ„ط© ط§ظ„ظˆط­ط¯ط©',
-                      ),
+                      items: ['residential', 'commercial', 'other']
+                          .map(
+                            (v) => DropdownMenuItem(
+                              value: v,
+                              child: Text(_translatedValue(v)),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (v) {
+                        if (v != null) setState(() => type = v);
+                      },
                     ),
-                    items: [
-                      DropdownMenuItem(
-                        value: 'available',
-                        child: Text(trText('Available', 'ظ…طھط§ط­ط©')),
-                      ),
-                      DropdownMenuItem(
-                        value: 'occupied',
-                        child: Text(trText('Occupied', 'ظ…ط´ط؛ظˆظ„ط©')),
-                      ),
-                      DropdownMenuItem(
-                        value: 'maintenance',
-                        child: Text(trText('Maintenance', 'طµظٹط§ظ†ط©')),
-                      ),
-                    ],
-                    onChanged: (value) {
-                      if (value != null) setState(() => status = value);
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  _field(description, trText('Description', 'ط§ظ„ظˆطµظپ')),
-                ],
+                    const SizedBox(height: 12),
+                    _formField(address, 'address'.tr),
+                    _formField(description, _t('description')),
+                  ],
+                ),
               ),
             ),
             actions: [
-              TextButton(
-                onPressed: Get.back,
-                child: Text(trText('Cancel', 'ط¥ظ„ط؛ط§ط،')),
-              ),
+              TextButton(onPressed: Get.back, child: Text(_t('cancel'))),
               FilledButton(
-                onPressed: () {
-                  if (number.text.trim().isEmpty) return;
-                  Get.back();
-                  controller.saveUnit(
+                onPressed: () async {
+                  if (!formKey.currentState!.validate()) return;
+
+                  final saved = await controller.saveProperty(
+                    PropertyEntity(
+                      id: item?.id,
+                      name: name.text.trim(),
+                      type: type,
+                      address: address.text.trim(),
+                      description: description.text.trim(),
+                    ),
+                  );
+                  if (saved) Get.back();
+                },
+                child: Text(_t('save')),
+              ),
+            ],
+          ),
+        ),
+        barrierDismissible: false,
+      );
+    } finally {
+      name.dispose();
+      address.dispose();
+      description.dispose();
+    }
+  }
+
+  Future<void> _departmentDialog([DepartmentEntity? item]) async {
+    final selected = controller.selectedProperty.value;
+    if (selected?.id == null) return;
+
+    final formKey = GlobalKey<FormState>();
+    final name = TextEditingController(text: item?.name ?? '');
+    final description = TextEditingController(text: item?.description ?? '');
+
+    try {
+      await Get.dialog<void>(
+        AlertDialog(
+          title: Text(_t('department')),
+          content: Form(
+            key: formKey,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _formField(
+                    name,
+                    _t('department_name_required'),
+                    validator: (v) =>
+                        _required(v, _t('department_name_required')),
+                  ),
+                  _formField(description, _t('description')),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: Get.back, child: Text(_t('cancel'))),
+            FilledButton(
+              onPressed: () async {
+                if (!formKey.currentState!.validate()) return;
+
+                final saved = await controller.saveDepartment(
+                  DepartmentEntity(
+                    id: item?.id,
+                    propertyId: selected!.id!,
+                    name: name.text.trim(),
+                    description: description.text.trim(),
+                  ),
+                );
+                if (saved) Get.back();
+              },
+              child: Text(_t('save')),
+            ),
+          ],
+        ),
+        barrierDismissible: false,
+      );
+    } finally {
+      name.dispose();
+      description.dispose();
+    }
+  }
+
+  Future<void> _unitDialog([UnitEntity? item]) async {
+    final selected = controller.selectedProperty.value;
+    if (selected?.id == null) return;
+
+    final formKey = GlobalKey<FormState>();
+    final number = TextEditingController(text: item?.number ?? '');
+    final floor = TextEditingController(text: '${item?.floor ?? 0}');
+    final area = TextEditingController(text: '${item?.area ?? ''}');
+    final rent = TextEditingController(text: '${item?.rent ?? ''}');
+    final description = TextEditingController(text: item?.description ?? '');
+
+    int? departmentId = item?.departmentId;
+    String type = item?.type ?? 'apartment';
+    String status = item?.status ?? 'available';
+
+    const unitTypes = ['apartment', 'shop', 'office', 'villa', 'other'];
+    const statuses = ['available', 'occupied', 'maintenance'];
+
+    if (!unitTypes.contains(type)) type = 'other';
+    if (!statuses.contains(status)) status = 'available';
+
+    try {
+      await Get.dialog<void>(
+        StatefulBuilder(
+          builder: (context, setState) => AlertDialog(
+            title: Text(_t('unit_details')),
+            content: Form(
+              key: formKey,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _formField(
+                      number,
+                      _t('unit_number_required'),
+                      validator: (v) =>
+                          _required(v, _t('unit_number_required')),
+                    ),
+                    DropdownButtonFormField<String>(
+                      initialValue: type,
+                      isExpanded: true,
+                      decoration: InputDecoration(
+                        labelText: _t('unit_type'),
+                        border: const OutlineInputBorder(),
+                      ),
+                      items: unitTypes
+                          .map(
+                            (v) => DropdownMenuItem(
+                              value: v,
+                              child: Text(_translatedValue(v)),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (v) {
+                        if (v != null) setState(() => type = v);
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    _formField(
+                      floor,
+                      _t('floor'),
+                      numeric: true,
+                      validator: _floorValidator,
+                    ),
+                    _formField(
+                      area,
+                      _t('area'),
+                      numeric: true,
+                      validator: (v) => _positiveNumber(v, _t('area')),
+                    ),
+                    _formField(
+                      rent,
+                      _t('monthly_rent'),
+                      numeric: true,
+                      validator: (v) => _positiveNumber(
+                        v,
+                        _t('monthly_rent'),
+                        allowZero: true,
+                      ),
+                    ),
+                    DropdownButtonFormField<int?>(
+                      initialValue: departmentId,
+                      isExpanded: true,
+                      decoration: InputDecoration(
+                        labelText: _t('department_optional'),
+                        border: const OutlineInputBorder(),
+                      ),
+                      items: [
+                        DropdownMenuItem<int?>(
+                          value: null,
+                          child: Text(_t('no_department')),
+                        ),
+                        ...controller.departments
+                            .where((d) => d.id != null)
+                            .map(
+                              (d) => DropdownMenuItem<int?>(
+                                value: d.id,
+                                child: Text(d.name),
+                              ),
+                            ),
+                      ],
+                      onChanged: (v) => setState(() => departmentId = v),
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      initialValue: status,
+                      isExpanded: true,
+                      decoration: InputDecoration(
+                        labelText: _t('availability'),
+                        border: const OutlineInputBorder(),
+                      ),
+                      items: statuses
+                          .map(
+                            (v) => DropdownMenuItem(
+                              value: v,
+                              child: Text(_translatedValue(v)),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (v) {
+                        if (v != null) setState(() => status = v);
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    _formField(description, _t('description')),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: Get.back, child: Text(_t('cancel'))),
+              FilledButton(
+                onPressed: () async {
+                  if (!formKey.currentState!.validate()) return;
+
+                  final floorValue = int.parse(floor.text.trim());
+                  final areaValue = double.parse(area.text.trim());
+                  final rentValue = double.parse(rent.text.trim());
+
+                  final saved = await controller.saveUnit(
                     UnitEntity(
                       id: item?.id,
-                      propertyId: propertyId,
+                      propertyId: selected!.id!,
                       departmentId: departmentId,
                       number: number.text.trim(),
-                      type: type.text.trim(),
-                      floor: int.tryParse(floor.text) ?? 0,
-                      area: double.tryParse(area.text) ?? 0,
-                      rent: double.tryParse(rent.text) ?? 0,
+                      type: type,
+                      floor: floorValue,
+                      area: areaValue,
+                      rent: rentValue,
                       status: status,
                       description: description.text.trim(),
                     ),
                   );
+                  if (saved) Get.back();
                 },
-                child: Text(trText('Save', 'ط­ظپط¸')),
+                child: Text(_t('save')),
               ),
             ],
-          );
-        },
-      ),
-    );
+          ),
+        ),
+        barrierDismissible: false,
+      );
+    } finally {
+      number.dispose();
+      floor.dispose();
+      area.dispose();
+      rent.dispose();
+      description.dispose();
+    }
   }
 
-  Widget _field(
-    TextEditingController controller,
+  Widget _formField(
+    TextEditingController textController,
     String label, {
     bool numeric = false,
+    String? Function(String?)? validator,
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: TextField(
-        controller: controller,
+      child: TextFormField(
+        controller: textController,
+        validator: validator,
         keyboardType: numeric
             ? const TextInputType.numberWithOptions(decimal: true)
             : TextInputType.text,
@@ -549,30 +763,27 @@ class PropertyScreen extends GetView<PropertyController> {
     );
   }
 
-  void _confirmDelete(String title, VoidCallback action) {
-    Get.dialog(
+  Future<void> _confirmDelete(
+    String title,
+    Future<void> Function() action,
+  ) async {
+    final confirmed = await Get.dialog<bool>(
       AlertDialog(
         title: Text(title),
-        content: Text(
-          trText(
-            'This action cannot be undone.',
-            'ظ„ط§ ظٹظ…ظƒظ† ط§ظ„طھط±ط§ط¬ط¹ ط¹ظ† ظ‡ط°ط§ ط§ظ„ط¥ط¬ط±ط§ط،.',
-          ),
-        ),
+        content: Text(_t('this_action_cannot_be_undone')),
         actions: [
           TextButton(
-            onPressed: Get.back,
-            child: Text(trText('Cancel', 'ط¥ظ„ط؛ط§ط،')),
+            onPressed: () => Get.back(result: false),
+            child: Text(_t('cancel')),
           ),
           FilledButton(
-            onPressed: () {
-              Get.back();
-              action();
-            },
-            child: Text(trText('Delete', 'ط­ط°ظپ')),
+            onPressed: () => Get.back(result: true),
+            child: Text(_t('delete')),
           ),
         ],
       ),
     );
+
+    if (confirmed == true) await action();
   }
 }

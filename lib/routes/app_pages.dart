@@ -12,6 +12,8 @@ import '../features/properties/presentation/bindings/property_binding.dart';
 import '../features/properties/presentation/screens/property_screen.dart';
 import '../features/tenants_contracts/presentation/bindings/tenant_contract_binding.dart';
 import '../features/tenants_contracts/presentation/screens/tenant_contract_screen.dart';
+import '../features/services/presentation/bindings/services_binding.dart';
+import '../features/services/presentation/screens/services_screen.dart';
 import 'app_routes.dart';
 
 class AppPages {
@@ -52,6 +54,11 @@ class AppPages {
       name: AppRoutes.tenantContracts,
       page: () => const TenantContractScreen(),
       binding: TenantContractBinding(),
+    ),
+    GetPage(
+      name: AppRoutes.services,
+      page: () => const ServicesScreen(),
+      binding: ServicesBinding(),
     ),
   ];
 }

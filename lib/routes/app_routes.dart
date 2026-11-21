@@ -8,4 +8,5 @@ class AppRoutes {
   static const home = '/home';
   static const properties = '/properties';
   static const tenantContracts = '/tenants-contracts';
+  static const services = '/services';
 }

@@ -1,30 +1,39 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:ejary/main.dart';
+import 'package:ejary/routes/app_routes.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const StarterApp());
+  group('EJARY route configuration', () {
+    test('all main application routes are defined', () {
+      final routes = <String>[
+        AppRoutes.splash,
+        AppRoutes.pinSetup,
+        AppRoutes.pinVerify,
+        AppRoutes.pinChange,
+        AppRoutes.home,
+        AppRoutes.properties,
+        AppRoutes.tenantContracts,
+      ];
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+      expect(routes, hasLength(7));
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+      for (final route in routes) {
+        expect(route, isNotEmpty);
+        expect(route.startsWith('/'), isTrue);
+      }
+    });
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    test('application routes do not contain duplicates', () {
+      final routes = <String>[
+        AppRoutes.splash,
+        AppRoutes.pinSetup,
+        AppRoutes.pinVerify,
+        AppRoutes.pinChange,
+        AppRoutes.home,
+        AppRoutes.properties,
+        AppRoutes.tenantContracts,
+      ];
+
+      expect(routes.toSet().length, routes.length);
+    });
   });
 }

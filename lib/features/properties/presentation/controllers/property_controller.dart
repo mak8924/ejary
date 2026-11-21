@@ -17,15 +17,16 @@ class PropertyController extends GetxController {
 
   List<PropertyEntity> get filteredProperties {
     final query = searchText.value.trim().toLowerCase();
+
     if (query.isEmpty) return properties;
-    return properties
-        .where(
-          (p) =>
-              p.name.toLowerCase().contains(query) ||
-              p.address.toLowerCase().contains(query),
-        )
-        .toList();
+
+    return properties.where((property) {
+      return property.name.toLowerCase().contains(query) ||
+          property.address.toLowerCase().contains(query);
+    }).toList();
   }
+
+  bool get _isArabic => Get.locale?.languageCode == 'ar';
 
   @override
   void onInit() {
@@ -35,14 +36,17 @@ class PropertyController extends GetxController {
 
   Future<void> loadProperties() async {
     isLoading.value = true;
+
     try {
       properties.assignAll(await useCases.properties());
 
       final selectedId = selectedProperty.value?.id;
+
       if (selectedId != null) {
-        final match = properties.where((p) => p.id == selectedId);
-        if (match.isNotEmpty) {
-          selectedProperty.value = match.first;
+        final matches = properties.where((p) => p.id == selectedId);
+
+        if (matches.isNotEmpty) {
+          selectedProperty.value = matches.first;
           await loadPropertyDetails(selectedId);
         } else {
           selectedProperty.value = null;
@@ -50,106 +54,208 @@ class PropertyController extends GetxController {
           units.clear();
         }
       }
-    } catch (e) {
-      _error(e);
+    } catch (error) {
+      _error(error);
     } finally {
       isLoading.value = false;
     }
   }
 
-  void searchProperties(String value) => searchText.value = value;
+  void searchProperties(String value) {
+    searchText.value = value;
+  }
 
   Future<void> selectProperty(PropertyEntity property) async {
     selectedProperty.value = property;
-    await loadPropertyDetails(property.id!);
+
+    final id = property.id;
+    if (id == null) return;
+
+    await loadPropertyDetails(id);
   }
 
-  Future<void> loadPropertyDetails(int id) async {
+  Future<bool> loadPropertyDetails(int id) async {
     try {
       departments.assignAll(await useCases.departments(id));
       units.assignAll(await useCases.units(id));
-    } catch (e) {
-      _error(e);
+      return true;
+    } catch (error) {
+      _error(error);
+      return false;
     }
   }
 
-  Future<void> saveProperty(PropertyEntity value) async {
+  Future<bool> saveProperty(PropertyEntity value) async {
     try {
       if (value.id == null) {
         await useCases.addProperty(value);
       } else {
         await useCases.updateProperty(value);
       }
+
       await loadProperties();
-      Get.snackbar('Success'.tr, 'Property saved successfully'.tr);
-    } catch (e) {
-      _error(e);
+      _success(
+        _isArabic ? 'تم حفظ العقار بنجاح.' : 'Property saved successfully.',
+      );
+      return true;
+    } catch (error) {
+      _error(error);
+      return false;
     }
   }
 
-  Future<void> removeProperty(int id) async {
+  Future<bool> removeProperty(int id) async {
     try {
       await useCases.deleteProperty(id);
       await loadProperties();
-      Get.snackbar('Success'.tr, 'Property deleted'.tr);
-    } catch (e) {
-      _error(e);
+
+      _success(_isArabic ? 'تم حذف العقار.' : 'Property deleted.');
+      return true;
+    } catch (error) {
+      _error(error);
+      return false;
     }
   }
 
-  Future<void> saveDepartment(DepartmentEntity value) async {
+  Future<bool> saveDepartment(DepartmentEntity value) async {
     try {
       if (value.id == null) {
         await useCases.addDepartment(value);
       } else {
         await useCases.updateDepartment(value);
       }
+
       await loadPropertyDetails(value.propertyId);
-    } catch (e) {
-      _error(e);
+
+      _success(
+        _isArabic ? 'تم حفظ القسم بنجاح.' : 'Department saved successfully.',
+      );
+      return true;
+    } catch (error) {
+      _error(error);
+      return false;
     }
   }
 
-  Future<void> removeDepartment(int id) async {
+  Future<bool> removeDepartment(int id) async {
     final propertyId = selectedProperty.value?.id;
-    if (propertyId == null) return;
+
+    if (propertyId == null) {
+      _error(StateError('No property is selected.'));
+      return false;
+    }
+
     try {
       await useCases.deleteDepartment(id);
       await loadPropertyDetails(propertyId);
-    } catch (e) {
-      _error(e);
+
+      _success(_isArabic ? 'تم حذف القسم.' : 'Department deleted.');
+      return true;
+    } catch (error) {
+      _error(error);
+      return false;
     }
   }
 
-  Future<void> saveUnit(UnitEntity value) async {
+  Future<bool> saveUnit(UnitEntity value) async {
     try {
       if (value.id == null) {
         await useCases.addUnit(value);
       } else {
         await useCases.updateUnit(value);
       }
+
       await loadPropertyDetails(value.propertyId);
-    } catch (e) {
-      _error(e);
+
+      _success(_isArabic ? 'تم حفظ الوحدة بنجاح.' : 'Unit saved successfully.');
+      return true;
+    } catch (error) {
+      _error(error);
+      return false;
     }
   }
 
-  Future<void> removeUnit(int id) async {
+  Future<bool> removeUnit(int id) async {
     final propertyId = selectedProperty.value?.id;
-    if (propertyId == null) return;
+
+    if (propertyId == null) {
+      _error(StateError('No property is selected.'));
+      return false;
+    }
+
     try {
       await useCases.deleteUnit(id);
       await loadPropertyDetails(propertyId);
-    } catch (e) {
-      _error(e);
+
+      _success(_isArabic ? 'تم حذف الوحدة.' : 'Unit deleted.');
+      return true;
+    } catch (error) {
+      _error(error);
+      return false;
     }
   }
 
-  void _error(Object error) {
+  void _success(String message) {
     Get.snackbar(
-      'Error',
-      'Operation failed: $error',
+      _isArabic ? 'نجاح' : 'Success',
+      message,
       snackPosition: SnackPosition.BOTTOM,
+      duration: const Duration(seconds: 3),
+    );
+  }
+
+  void _error(Object error) {
+    final message = error.toString().toLowerCase();
+    String friendlyMessage;
+
+    if (message.contains('property with this name already exists')) {
+      friendlyMessage = _isArabic
+          ? 'اسم العقار موجود بالفعل. اختاري اسمًا آخر.'
+          : 'A property with this name already exists. Choose another name.';
+    } else if (message.contains('department with this name already exists')) {
+      friendlyMessage = _isArabic
+          ? 'اسم القسم موجود بالفعل في هذا العقار.'
+          : 'A department with this name already exists in this property.';
+    } else if (message.contains('unit number already exists') ||
+        message.contains('unit with this number already exists')) {
+      friendlyMessage = _isArabic
+          ? 'رقم الوحدة موجود بالفعل في هذا العقار.'
+          : 'A unit with this number already exists in this property.';
+    } else if (message.contains('floor number cannot be negative')) {
+      friendlyMessage = _isArabic
+          ? 'رقم الطابق لا يمكن أن يكون سالبًا.'
+          : 'Floor number cannot be negative.';
+    } else if (message.contains('area must be greater than zero')) {
+      friendlyMessage = _isArabic
+          ? 'المساحة يجب أن تكون أكبر من صفر.'
+          : 'Area must be greater than zero.';
+    } else if (message.contains('monthly rent cannot be negative')) {
+      friendlyMessage = _isArabic
+          ? 'الإيجار الشهري لا يمكن أن يكون سالبًا.'
+          : 'Monthly rent cannot be negative.';
+    } else if (message.contains('department does not belong')) {
+      friendlyMessage = _isArabic
+          ? 'القسم المحدد لا يتبع هذا العقار.'
+          : 'The selected department does not belong to this property.';
+    } else if (message.contains('cannot delete property')) {
+      friendlyMessage = _isArabic
+          ? 'لا يمكن حذف العقار قبل معالجة الأقسام والوحدات المرتبطة به.'
+          : 'This property cannot be deleted while it has linked departments or units.';
+    } else if (message.contains('cannot delete unit')) {
+      friendlyMessage = _isArabic
+          ? 'لا يمكن حذف هذه الوحدة لوجود عقود مرتبطة بها.'
+          : 'This unit cannot be deleted because it has linked contracts.';
+    } else {
+      friendlyMessage = _isArabic
+          ? 'تعذّر إتمام العملية. راجعي البيانات وحاولي مرة أخرى.'
+          : 'The operation could not be completed. Check the information and try again.';
+    }
+
+    Get.snackbar(
+      _isArabic ? 'خطأ' : 'Error',
+      friendlyMessage,
+      snackPosition: SnackPosition.BOTTOM,
+      duration: const Duration(seconds: 4),
     );
   }
 }

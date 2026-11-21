@@ -32,15 +32,26 @@ class TenantContractController extends GetxController {
     loadAll();
   }
 
-  Future<void> loadAll() async {
+  /// Loads all three collections together.
+  /// Existing visible data is preserved if any query fails.
+  Future<bool> loadAll({bool showError = true}) async {
+    if (isLoading.value) return false;
+
     isLoading.value = true;
 
     try {
-      tenants.assignAll(await useCases.tenants());
-      units.assignAll(await useCases.units());
-      contracts.assignAll(await useCases.contracts());
-    } catch (e) {
-      _showError(e);
+      final loadedTenants = await useCases.tenants();
+      final loadedUnits = await useCases.units();
+      final loadedContracts = await useCases.contracts();
+
+      tenants.assignAll(loadedTenants);
+      units.assignAll(loadedUnits);
+      contracts.assignAll(loadedContracts);
+
+      return true;
+    } catch (error) {
+      if (showError) _showError(error);
+      return false;
     } finally {
       isLoading.value = false;
     }
@@ -50,14 +61,32 @@ class TenantContractController extends GetxController {
     searchText.value = value;
   }
 
+  /// A successful database write remains successful even if refreshing
+  /// the displayed lists fails. This prevents duplicate submissions.
+  Future<void> _refreshAfterMutation() async {
+    final refreshed = await loadAll(showError: false);
+
+    if (!refreshed) {
+      Get.snackbar(
+        'error'.tr,
+        _isArabic
+            ? 'تم الحفظ، لكن تعذر تحديث القائمة. يرجى إعادة تحميل الشاشة.'
+            : 'Saved, but the list could not be refreshed. Please reload.',
+        snackPosition: SnackPosition.BOTTOM,
+        duration: const Duration(seconds: 5),
+      );
+    }
+  }
+
   Future<bool> saveTenant(TenantEntity tenant) async {
     try {
       await useCases.saveTenant(tenant);
-      await loadAll();
-      Get.snackbar('Success', 'Tenant saved successfully');
+      await _refreshAfterMutation();
+
+      Get.snackbar('success'.tr, 'tenant_saved'.tr);
       return true;
-    } catch (e) {
-      _showError(e);
+    } catch (error) {
+      _showError(error);
       return false;
     }
   }
@@ -65,11 +94,12 @@ class TenantContractController extends GetxController {
   Future<bool> deleteTenant(int id) async {
     try {
       await useCases.deleteTenant(id);
-      await loadAll();
-      Get.snackbar('Success', 'Tenant deleted');
+      await _refreshAfterMutation();
+
+      Get.snackbar('success'.tr, 'tenant_deleted'.tr);
       return true;
-    } catch (e) {
-      _showError(e);
+    } catch (error) {
+      _showError(error);
       return false;
     }
   }
@@ -77,11 +107,12 @@ class TenantContractController extends GetxController {
   Future<bool> saveContract(ContractEntity contract) async {
     try {
       await useCases.saveContract(contract);
-      await loadAll();
-      Get.snackbar('Success', 'Contract saved successfully');
+      await _refreshAfterMutation();
+
+      Get.snackbar('success'.tr, 'contract_saved'.tr);
       return true;
-    } catch (e) {
-      _showError(e);
+    } catch (error) {
+      _showError(error);
       return false;
     }
   }
@@ -89,19 +120,54 @@ class TenantContractController extends GetxController {
   Future<bool> changeStatus(int id, String status) async {
     try {
       await useCases.changeContractStatus(id, status);
-      await loadAll();
-      Get.snackbar('Success', 'Contract updated');
+      await _refreshAfterMutation();
+
+      Get.snackbar('success'.tr, 'contract_updated'.tr);
       return true;
-    } catch (e) {
-      _showError(e);
+    } catch (error) {
+      _showError(error);
       return false;
     }
   }
 
+  bool get _isArabic => Get.locale?.languageCode == 'ar';
+
   void _showError(Object error) {
+    final message = error.toString().toLowerCase();
+
+    String friendlyMessage;
+
+    if (message.contains('already exists') ||
+        message.contains('duplicate') ||
+        message.contains('unique constraint')) {
+      friendlyMessage = _isArabic
+          ? 'هذه البيانات مسجلة مسبقاً. يرجى التحقق من المدخلات.'
+          : 'This record already exists. Please check the entered information.';
+    } else if (message.contains('overlap') ||
+        message.contains('conflict') ||
+        message.contains('active contract')) {
+      friendlyMessage = _isArabic
+          ? 'توجد فترة عقد نشط متعارضة لهذه الوحدة.'
+          : 'An active contract already overlaps this unit and date range.';
+    } else if (message.contains('contract history') ||
+        message.contains('foreign key constraint')) {
+      friendlyMessage = _isArabic
+          ? 'لا يمكن تنفيذ العملية لوجود سجلات مرتبطة بهذا العنصر.'
+          : 'This operation cannot be completed because related records exist.';
+    } else if (message.contains('not found') ||
+        message.contains('no longer exists')) {
+      friendlyMessage = _isArabic
+          ? 'السجل المطلوب غير موجود أو تم تغييره.'
+          : 'The requested record was not found or has changed.';
+    } else {
+      friendlyMessage = _isArabic
+          ? 'تعذر إكمال العملية. يرجى مراجعة البيانات والمحاولة مرة أخرى.'
+          : 'The operation could not be completed. Check the data and try again.';
+    }
+
     Get.snackbar(
-      'Operation failed',
-      error.toString().replaceFirst('Exception: ', ''),
+      'error'.tr,
+      friendlyMessage,
       snackPosition: SnackPosition.BOTTOM,
       duration: const Duration(seconds: 5),
     );

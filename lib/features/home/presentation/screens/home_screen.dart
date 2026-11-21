@@ -32,7 +32,6 @@ class HomeScreen extends GetView<HomeController> {
           Text('starter_message'.tr),
           const SizedBox(height: 24),
 
-          // PROPERTY MANAGEMENT
           Card(
             clipBehavior: Clip.antiAlias,
             child: InkWell(
@@ -56,16 +55,13 @@ class HomeScreen extends GetView<HomeController> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Property Management',
+                            'property_management'.tr,
                             style: theme.textTheme.titleLarge?.copyWith(
                               fontWeight: FontWeight.bold,
                             ),
                           ),
                           const SizedBox(height: 6),
-                          Text(
-                            'Manage properties, departments and rental units.',
-                            style: theme.textTheme.bodyMedium,
-                          ),
+                          Text('property_management_desc'.tr),
                         ],
                       ),
                     ),
@@ -78,46 +74,84 @@ class HomeScreen extends GetView<HomeController> {
 
           const SizedBox(height: 16),
 
-          // TENANTS AND CONTRACTS
           Card(
             clipBehavior: Clip.antiAlias,
             child: InkWell(
               onTap: () => Get.toNamed(AppRoutes.tenantContracts),
-              child: const Padding(
-                padding: EdgeInsets.all(20),
+              child: Padding(
+                padding: const EdgeInsets.all(20),
                 child: Row(
                   children: [
                     CircleAvatar(
                       radius: 30,
                       child: Icon(Icons.people_alt_outlined, size: 30),
                     ),
-                    SizedBox(width: 16),
+                    const SizedBox(width: 16),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Tenant & Contract Management',
-                            style: TextStyle(
-                              fontSize: 18,
+                            'tenant_contract_management'.tr,
+                            style: theme.textTheme.titleLarge?.copyWith(
                               fontWeight: FontWeight.bold,
                             ),
                           ),
-                          SizedBox(height: 6),
-                          Text(
-                            'Manage tenants, rental contracts and renewals.',
-                          ),
+                          const SizedBox(height: 6),
+                          Text('tenant_contract_management_desc'.tr),
                         ],
                       ),
                     ),
-                    Icon(Icons.chevron_right),
+                    const Icon(Icons.chevron_right),
                   ],
                 ),
               ),
             ),
           ),
+
           const SizedBox(height: 16),
-          // SECURITY MESSAGE
+
+          Card(
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: () => Get.toNamed(AppRoutes.services),
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 30,
+                      backgroundColor: colors.secondaryContainer,
+                      child: Icon(
+                        Icons.miscellaneous_services_outlined,
+                        size: 30,
+                        color: colors.onSecondaryContainer,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'services_management'.tr,
+                            style: theme.textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text('services_management_desc'.tr),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.chevron_right),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 16),
           Card(
             child: Padding(
               padding: const EdgeInsets.all(20),
@@ -140,7 +174,6 @@ class HomeScreen extends GetView<HomeController> {
 
           const SizedBox(height: 24),
 
-          // SETTINGS
           Text('settings'.tr, style: theme.textTheme.titleLarge),
           const SizedBox(height: 12),
 
