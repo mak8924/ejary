@@ -295,6 +295,7 @@ class AppTranslations extends Translations {
       'audit_due': 'Due',
       'audit_payment': 'Payment',
       'audit_payment_allocation': 'Payment allocation',
+      'quick_access': 'Quick Access',
     },
 
     'ar_YE': {
@@ -586,6 +587,7 @@ class AppTranslations extends Translations {
       'overdue_balance': 'الرصيد المتأخر',
       'refresh': 'تحديث',
       'no_report_data': 'لا توجد بيانات متاحة.',
+      'quick_access': 'الوصول السريع',
     },
   };
 }
