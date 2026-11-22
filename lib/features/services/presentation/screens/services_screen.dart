@@ -127,40 +127,52 @@ class ServicesScreen extends GetView<ServicesController> {
             title: Text('${item['service_name'] ?? ''}'),
             subtitle: Text(
               '${item['contract_number']} • ${item['tenant_name']}\n'
-              '${item['amount']}',
+              '${'contract_service_amount'.tr}: ${item['amount']}',
             ),
             isThreeLine: true,
-            trailing: IconButton(
-              tooltip: 'remove_assignment'.tr,
-              icon: const Icon(Icons.delete_outline),
-              onPressed: () async {
-                final confirmed = await Get.dialog<bool>(
-                  AlertDialog(
-                    title: Text('remove_assignment_title'.tr),
-                    content: Text('remove_assignment_message'.tr),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Get.back(result: false),
-                        child: Text('cancel'.tr),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  tooltip: 'edit'.tr,
+                  icon: const Icon(Icons.edit_outlined),
+                  onPressed: () {
+                    _showAssignmentEditDialog(item);
+                  },
+                ),
+                IconButton(
+                  tooltip: 'remove_assignment'.tr,
+                  icon: const Icon(Icons.delete_outline),
+                  onPressed: () async {
+                    final confirmed = await Get.dialog<bool>(
+                      AlertDialog(
+                        title: Text('remove_assignment_title'.tr),
+                        content: Text('remove_assignment_message'.tr),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Get.back(result: false),
+                            child: Text('cancel'.tr),
+                          ),
+                          TextButton(
+                            onPressed: () => Get.back(result: true),
+                            child: Text('confirm'.tr),
+                          ),
+                        ],
                       ),
-                      TextButton(
-                        onPressed: () => Get.back(result: true),
-                        child: Text('confirm'.tr),
-                      ),
-                    ],
-                  ),
-                );
+                    );
 
-                if (confirmed != true) return;
+                    if (confirmed != true) return;
 
-                final removed = await controller.removeAssignment(
-                  item['id'] as int,
-                );
+                    final removed = await controller.removeAssignment(
+                      item['id'] as int,
+                    );
 
-                if (removed) {
-                  Get.snackbar('success'.tr, 'assignment_removed'.tr);
-                }
-              },
+                    if (removed) {
+                      Get.snackbar('success'.tr, 'assignment_removed'.tr);
+                    }
+                  },
+                ),
+              ],
             ),
           ),
         );
@@ -195,6 +207,12 @@ class ServicesScreen extends GetView<ServicesController> {
         contracts: controller.contracts.toList(),
         services: availableServices,
       ),
+    );
+  }
+
+  Future<void> _showAssignmentEditDialog(Map<String, Object?> item) async {
+    await Get.dialog<void>(
+      _ServiceAssignmentEditDialog(controller: controller, item: item),
     );
   }
 }
@@ -447,3 +465,124 @@ class _ServiceAssignmentDialogState extends State<_ServiceAssignmentDialog> {
     );
   }
 }
+
+class _ServiceAssignmentEditDialog extends StatefulWidget {
+  const _ServiceAssignmentEditDialog({
+    required this.controller,
+    required this.item,
+  });
+
+  final ServicesController controller;
+  final Map<String, Object?> item;
+
+  @override
+  State<_ServiceAssignmentEditDialog> createState() =>
+      _ServiceAssignmentEditDialogState();
+}
+
+class _ServiceAssignmentEditDialogState
+    extends State<_ServiceAssignmentEditDialog> {
+  late final TextEditingController _amountController;
+
+  bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _amountController = TextEditingController(
+      text: '${widget.item['amount'] ?? 0}',
+    );
+  }
+
+  @override
+  void dispose() {
+    _amountController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    if (_isSaving) return;
+
+    final amount = double.tryParse(_amountController.text.trim());
+
+    if (amount == null || !amount.isFinite || amount < 0) {
+      Get.snackbar('notice'.tr, 'valid_amount'.tr);
+      return;
+    }
+
+    setState(() => _isSaving = true);
+
+    try {
+      final saved = await widget.controller.assignService(
+        contractId: widget.item['contract_id'] as int,
+        serviceId: widget.item['service_id'] as int,
+        amount: amount,
+      );
+
+      if (!mounted) return;
+
+      if (saved) {
+        Get.back();
+        Get.snackbar('success'.tr, 'contract_updated'.tr);
+      } else {
+        setState(() => _isSaving = false);
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+      rethrow;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text('${'edit'.tr} - ${widget.item['service_name'] ?? ''}'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '${'contract'.tr}: '
+            '${widget.item['contract_number'] ?? ''}',
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '${'tenant'.tr}: '
+            '${widget.item['tenant_name'] ?? ''}',
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _amountController,
+            enabled: !_isSaving,
+            keyboardType: const TextInputType.numberWithOptions(
+              decimal: true,
+            ),
+            decoration: InputDecoration(
+              labelText: 'contract_service_amount'.tr,
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: _isSaving ? null : () => Get.back(),
+          child: Text('cancel'.tr),
+        ),
+        FilledButton(
+          onPressed: _isSaving ? null : _save,
+          child: _isSaving
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : Text('save'.tr),
+        ),
+      ],
+    );
+  }
+}
+

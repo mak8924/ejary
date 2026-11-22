@@ -16,6 +16,9 @@ import '../features/services/presentation/bindings/services_binding.dart';
 import '../features/services/presentation/screens/services_screen.dart';
 import '../features/dues_payments/presentation/bindings/dues_payments_binding.dart';
 import '../features/dues_payments/presentation/screens/dues_payments_screen.dart';
+import '../features/audit_reports/presentation/bindings/audit_reports_binding.dart';
+import '../features/audit_reports/presentation/screens/audit_logs_screen.dart';
+import '../features/audit_reports/presentation/screens/reports_screen.dart';
 import 'app_routes.dart';
 
 class AppPages {
@@ -66,6 +69,16 @@ class AppPages {
       name: AppRoutes.duesPayments,
       page: () => const DuesPaymentsScreen(),
       binding: DuesPaymentsBinding(),
+    ),
+    GetPage(
+      name: AppRoutes.auditLogs,
+      page: () => const AuditLogsScreen(),
+      binding: AuditReportsBinding(),
+    ),
+    GetPage(
+      name: AppRoutes.reports,
+      page: () => const ReportsScreen(),
+      binding: AuditReportsBinding(),
     ),
   ];
 }

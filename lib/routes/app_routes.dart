@@ -10,4 +10,6 @@ class AppRoutes {
   static const tenantContracts = '/tenants-contracts';
   static const services = '/services';
   static const duesPayments = '/dues-payments';
+  static const auditLogs = '/audit-logs';
+  static const reports = '/reports';
 }

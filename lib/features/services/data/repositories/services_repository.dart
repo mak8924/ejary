@@ -10,6 +10,22 @@ class ServicesRepository {
 
   Database get _db => localDatabase.database;
 
+  Future<void> _writeAudit(
+    DatabaseExecutor executor, {
+    required String action,
+    required String entityType,
+    required int? entityId,
+    required String description,
+  }) async {
+    await executor.insert('audit_logs', {
+      'action': action,
+      'entity_type': entityType,
+      'entity_id': entityId,
+      'description': description,
+      'created_at': DateTime.now().toIso8601String(),
+    });
+  }
+
   Future<List<Map<String, Object?>>> getServices() async {
     final db = _db;
     return db.query('services', orderBy: 'name COLLATE NOCASE');
@@ -46,7 +62,6 @@ class ServicesRepository {
     required double amount,
     required String billingPeriod,
   }) async {
-    final db = _db;
     final values = <String, Object?>{
       'name': name.trim(),
       'description': description.trim(),
@@ -58,37 +73,110 @@ class ServicesRepository {
       throw Exception('Invalid service information.');
     }
 
-    if (id == null) {
-      await db.insert('services', {...values, 'is_active': 1});
-    } else {
-      final count = await db.update(
-        'services',
-        values,
-        where: 'id = ?',
-        whereArgs: [id],
-      );
-      if (count == 0) throw Exception('Service not found.');
-    }
+    await _db.transaction((txn) async {
+      if (id == null) {
+        final serviceId = await txn.insert('services', {
+          ...values,
+          'is_active': 1,
+        });
+
+        await _writeAudit(
+          txn,
+          action: 'CREATE',
+          entityType: 'service',
+          entityId: serviceId,
+          description: 'Created service: ${name.trim()}',
+        );
+      } else {
+        final existing = await txn.query(
+          'services',
+          columns: ['id'],
+          where: 'id = ?',
+          whereArgs: [id],
+          limit: 1,
+        );
+
+        if (existing.isEmpty) {
+          throw Exception('Service not found.');
+        }
+
+        await txn.update('services', values, where: 'id = ?', whereArgs: [id]);
+
+        await _writeAudit(
+          txn,
+          action: 'UPDATE',
+          entityType: 'service',
+          entityId: id,
+          description: 'Updated service: ${name.trim()}',
+        );
+      }
+    });
   }
 
   Future<void> deactivateService(int id) async {
-    final db = _db;
-    await db.update(
-      'services',
-      {'is_active': 0},
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+    await _db.transaction((txn) async {
+      final rows = await txn.query(
+        'services',
+        columns: ['name', 'is_active'],
+        where: 'id = ?',
+        whereArgs: [id],
+        limit: 1,
+      );
+
+      if (rows.isEmpty) {
+        throw Exception('service_not_found');
+      }
+
+      if (rows.first['is_active'] == 0) return;
+
+      await txn.update(
+        'services',
+        {'is_active': 0},
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+
+      await _writeAudit(
+        txn,
+        action: 'DEACTIVATE',
+        entityType: 'service',
+        entityId: id,
+        description: 'Deactivated service: ${rows.first['name']}',
+      );
+    });
   }
 
   Future<void> activateService(int id) async {
-    final db = _db;
-    await db.update(
-      'services',
-      {'is_active': 1},
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+    await _db.transaction((txn) async {
+      final rows = await txn.query(
+        'services',
+        columns: ['name', 'is_active'],
+        where: 'id = ?',
+        whereArgs: [id],
+        limit: 1,
+      );
+
+      if (rows.isEmpty) {
+        throw Exception('service_not_found');
+      }
+
+      if (rows.first['is_active'] == 1) return;
+
+      await txn.update(
+        'services',
+        {'is_active': 1},
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+
+      await _writeAudit(
+        txn,
+        action: 'ACTIVATE',
+        entityType: 'service',
+        entityId: id,
+        description: 'Activated service: ${rows.first['name']}',
+      );
+    });
   }
 
   Future<void> assignService({
@@ -96,16 +184,14 @@ class ServicesRepository {
     required int serviceId,
     required double amount,
   }) async {
-    final db = _db;
-
     if (!amount.isFinite || amount < 0) {
       throw Exception('Invalid service amount.');
     }
 
-    await db.transaction((txn) async {
+    await _db.transaction((txn) async {
       final contract = await txn.query(
         'contracts',
-        columns: ['status'],
+        columns: ['status', 'contract_number'],
         where: 'id = ?',
         whereArgs: [contractId],
         limit: 1,
@@ -117,7 +203,7 @@ class ServicesRepository {
 
       final service = await txn.query(
         'services',
-        columns: ['id', 'is_active'],
+        columns: ['id', 'name', 'is_active'],
         where: 'id = ?',
         whereArgs: [serviceId],
         limit: 1,
@@ -129,41 +215,63 @@ class ServicesRepository {
 
       final existing = await txn.query(
         'contract_services',
-        columns: ['id'],
+        columns: ['id', 'amount'],
         where: 'contract_id = ? AND service_id = ?',
         whereArgs: [contractId, serviceId],
         limit: 1,
       );
 
+      late final int assignmentId;
+      late final String action;
+
       if (existing.isNotEmpty) {
+        assignmentId = existing.first['id'] as int;
+        action = 'UPDATE';
+
         await txn.update(
           'contract_services',
           {'amount': amount},
           where: 'id = ?',
-          whereArgs: [existing.first['id']],
+          whereArgs: [assignmentId],
         );
       } else {
-        await txn.insert('contract_services', {
+        assignmentId = await txn.insert('contract_services', {
           'contract_id': contractId,
           'service_id': serviceId,
           'amount': amount,
         });
+        action = 'CREATE';
       }
 
       await ContractServiceDuesSync.sync(txn, contractId: contractId);
+
+      await _writeAudit(
+        txn,
+        action: action,
+        entityType: 'service_assignment',
+        entityId: assignmentId,
+        description:
+            '$action service assignment: ${service.first['name']} '
+            'to contract ${contract.first['contract_number']} '
+            '(contract ID: $contractId, service ID: $serviceId, amount: $amount)',
+      );
     });
   }
 
   Future<bool> removeAssignment(int id) async {
-    final db = _db;
-
-    return db.transaction<bool>((txn) async {
-      final rows = await txn.query(
-        'contract_services',
-        columns: ['contract_id', 'service_id'],
-        where: 'id = ?',
-        whereArgs: [id],
-        limit: 1,
+    return _db.transaction<bool>((txn) async {
+      final rows = await txn.rawQuery(
+        '''
+        SELECT cs.contract_id, cs.service_id,
+               s.name AS service_name,
+               c.contract_number
+        FROM contract_services cs
+        INNER JOIN services s ON s.id = cs.service_id
+        INNER JOIN contracts c ON c.id = cs.contract_id
+        WHERE cs.id = ?
+        LIMIT 1
+        ''',
+        [id],
       );
 
       if (rows.isEmpty) return false;
@@ -186,6 +294,18 @@ class ServicesRepository {
       );
 
       await ContractServiceDuesSync.sync(txn, contractId: contractId);
+
+      await _writeAudit(
+        txn,
+        action: 'DELETE',
+        entityType: 'service_assignment',
+        entityId: id,
+        description:
+            'Removed service assignment: ${rows.first['service_name']} '
+            'from contract ${rows.first['contract_number']} '
+            '(contract ID: $contractId, service ID: $serviceId)',
+      );
+
       return true;
     });
   }
@@ -193,12 +313,10 @@ class ServicesRepository {
   // Hard deletion is refused while any contract still references the service.
   // Normal catalog lifecycle should use activateService/deactivateService.
   Future<void> deleteService(int id) async {
-    final db = _db;
-
-    await db.transaction((txn) async {
+    await _db.transaction((txn) async {
       final services = await txn.query(
         'services',
-        columns: ['id'],
+        columns: ['id', 'name'],
         where: 'id = ?',
         whereArgs: [id],
         limit: 1,
@@ -219,7 +337,23 @@ class ServicesRepository {
         throw Exception('service_linked_cannot_delete');
       }
 
-      await txn.delete('services', where: 'id = ?', whereArgs: [id]);
+      final deleted = await txn.delete(
+        'services',
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+
+      if (deleted == 0) {
+        throw Exception('service_not_found');
+      }
+
+      await _writeAudit(
+        txn,
+        action: 'DELETE',
+        entityType: 'service',
+        entityId: id,
+        description: 'Deleted service: ${services.first['name']}',
+      );
     });
   }
 }

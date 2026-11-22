@@ -19,8 +19,27 @@ class PropertyRepositoryImpl implements PropertyRepository {
     }
   }
 
-  Future<void> _ensurePropertyExists(int propertyId) async {
-    final rows = await db.query(
+  Future<void> _writeAudit(
+    DatabaseExecutor executor, {
+    required String action,
+    required String entityType,
+    required int? entityId,
+    required String description,
+  }) async {
+    await executor.insert('audit_logs', {
+      'action': action,
+      'entity_type': entityType,
+      'entity_id': entityId,
+      'description': description,
+      'created_at': DateTime.now().toIso8601String(),
+    });
+  }
+
+  Future<void> _ensurePropertyExists(
+    DatabaseExecutor executor,
+    int propertyId,
+  ) async {
+    final rows = await executor.query(
       'properties',
       columns: ['id'],
       where: 'id = ?',
@@ -33,8 +52,12 @@ class PropertyRepositoryImpl implements PropertyRepository {
     }
   }
 
-  Future<void> _ensureUniquePropertyName(String name, {int? excludeId}) async {
-    final rows = await db.query(
+  Future<void> _ensureUniquePropertyName(
+    DatabaseExecutor executor,
+    String name, {
+    int? excludeId,
+  }) async {
+    final rows = await executor.query(
       'properties',
       columns: ['id'],
       where: excludeId == null
@@ -50,11 +73,12 @@ class PropertyRepositoryImpl implements PropertyRepository {
   }
 
   Future<void> _ensureUniqueDepartmentName(
+    DatabaseExecutor executor,
     int propertyId,
     String name, {
     int? excludeId,
   }) async {
-    final rows = await db.query(
+    final rows = await executor.query(
       'departments',
       columns: ['id'],
       where: excludeId == null
@@ -71,13 +95,12 @@ class PropertyRepositoryImpl implements PropertyRepository {
     }
   }
 
-  Future<void> _validateUnit(UnitEntity unit) async {
+  Future<void> _validateUnit(DatabaseExecutor executor, UnitEntity unit) async {
     _requireText(unit.number, 'Unit number');
     _requireText(unit.type, 'Unit type');
 
-    await _ensurePropertyExists(unit.propertyId);
+    await _ensurePropertyExists(executor, unit.propertyId);
 
-    // floor and area are non-nullable fields in UnitEntity.
     if (unit.floor < 0) {
       throw ArgumentError('Floor number cannot be negative.');
     }
@@ -97,7 +120,7 @@ class PropertyRepositoryImpl implements PropertyRepository {
     }
 
     if (unit.departmentId != null) {
-      final departmentRows = await db.query(
+      final departmentRows = await executor.query(
         'departments',
         columns: ['id'],
         where: 'id = ? AND property_id = ?',
@@ -112,7 +135,7 @@ class PropertyRepositoryImpl implements PropertyRepository {
       }
     }
 
-    final duplicateRows = await db.query(
+    final duplicateRows = await executor.query(
       'units',
       columns: ['id'],
       where: unit.id == null
@@ -141,17 +164,29 @@ class PropertyRepositoryImpl implements PropertyRepository {
     _requireText(property.name, 'Property name');
     _requireText(property.type, 'Property type');
 
-    await _ensureUniquePropertyName(property.name);
+    return db.transaction((txn) async {
+      await _ensureUniquePropertyName(txn, property.name);
 
-    final now = DateTime.now().toIso8601String();
+      final now = DateTime.now().toIso8601String();
 
-    return db.insert('properties', {
-      'name': _clean(property.name),
-      'property_type': property.type,
-      'address': _clean(property.address),
-      'description': _clean(property.description),
-      'created_at': now,
-      'updated_at': now,
+      final propertyId = await txn.insert('properties', {
+        'name': _clean(property.name),
+        'property_type': property.type,
+        'address': _clean(property.address),
+        'description': _clean(property.description),
+        'created_at': now,
+        'updated_at': now,
+      });
+
+      await _writeAudit(
+        txn,
+        action: 'CREATE',
+        entityType: 'property',
+        entityId: propertyId,
+        description: 'Created property: ${_clean(property.name)}',
+      );
+
+      return propertyId;
     });
   }
 
@@ -160,59 +195,95 @@ class PropertyRepositoryImpl implements PropertyRepository {
     _requireText(property.name, 'Property name');
     _requireText(property.type, 'Property type');
 
-    await _ensureUniquePropertyName(property.name, excludeId: property.id);
+    await db.transaction((txn) async {
+      await _ensureUniquePropertyName(
+        txn,
+        property.name,
+        excludeId: property.id,
+      );
 
-    final count = await db.update(
-      'properties',
-      {
-        'name': _clean(property.name),
-        'property_type': property.type,
-        'address': _clean(property.address),
-        'description': _clean(property.description),
-        'updated_at': DateTime.now().toIso8601String(),
-      },
-      where: 'id = ?',
-      whereArgs: [property.id],
-    );
+      final count = await txn.update(
+        'properties',
+        {
+          'name': _clean(property.name),
+          'property_type': property.type,
+          'address': _clean(property.address),
+          'description': _clean(property.description),
+          'updated_at': DateTime.now().toIso8601String(),
+        },
+        where: 'id = ?',
+        whereArgs: [property.id],
+      );
 
-    if (count == 0) {
-      throw StateError('Property was not found.');
-    }
+      if (count == 0) {
+        throw StateError('Property was not found.');
+      }
+
+      await _writeAudit(
+        txn,
+        action: 'UPDATE',
+        entityType: 'property',
+        entityId: property.id,
+        description: 'Updated property: ${_clean(property.name)}',
+      );
+    });
   }
 
   @override
   Future<void> deleteProperty(int id) async {
-    final unitRows = await db.query(
-      'units',
-      columns: ['id'],
-      where: 'property_id = ?',
-      whereArgs: [id],
-      limit: 1,
-    );
-
-    final departmentRows = await db.query(
-      'departments',
-      columns: ['id'],
-      where: 'property_id = ?',
-      whereArgs: [id],
-      limit: 1,
-    );
-
-    if (unitRows.isNotEmpty || departmentRows.isNotEmpty) {
-      throw StateError(
-        'Delete the property departments and units before deleting the property.',
+    await db.transaction((txn) async {
+      final propertyRows = await txn.query(
+        'properties',
+        columns: ['name'],
+        where: 'id = ?',
+        whereArgs: [id],
+        limit: 1,
       );
-    }
 
-    final count = await db.delete(
-      'properties',
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+      final unitRows = await txn.query(
+        'units',
+        columns: ['id'],
+        where: 'property_id = ?',
+        whereArgs: [id],
+        limit: 1,
+      );
 
-    if (count == 0) {
-      throw StateError('Property was not found.');
-    }
+      final departmentRows = await txn.query(
+        'departments',
+        columns: ['id'],
+        where: 'property_id = ?',
+        whereArgs: [id],
+        limit: 1,
+      );
+
+      if (unitRows.isNotEmpty || departmentRows.isNotEmpty) {
+        throw StateError(
+          'Delete the property departments and units before deleting the property.',
+        );
+      }
+
+      final count = await txn.delete(
+        'properties',
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+
+      if (count == 0) {
+        throw StateError('Property was not found.');
+      }
+
+      final propertyName = propertyRows.isNotEmpty
+          ? propertyRows.first['name']
+          : 'ID $id';
+
+      await _writeAudit(
+        txn,
+        action: 'DELETE',
+        entityType: 'property',
+        entityId: id,
+        description: 'Deleted property: $propertyName',
+      );
+    });
   }
 
   @override
@@ -231,14 +302,32 @@ class PropertyRepositoryImpl implements PropertyRepository {
   Future<int> addDepartment(DepartmentEntity department) async {
     _requireText(department.name, 'Department name');
 
-    await _ensurePropertyExists(department.propertyId);
-    await _ensureUniqueDepartmentName(department.propertyId, department.name);
+    return db.transaction((txn) async {
+      await _ensurePropertyExists(txn, department.propertyId);
+      await _ensureUniqueDepartmentName(
+        txn,
+        department.propertyId,
+        department.name,
+      );
 
-    return db.insert('departments', {
-      'property_id': department.propertyId,
-      'name': _clean(department.name),
-      'description': _clean(department.description),
-      'created_at': DateTime.now().toIso8601String(),
+      final departmentId = await txn.insert('departments', {
+        'property_id': department.propertyId,
+        'name': _clean(department.name),
+        'description': _clean(department.description),
+        'created_at': DateTime.now().toIso8601String(),
+      });
+
+      await _writeAudit(
+        txn,
+        action: 'CREATE',
+        entityType: 'department',
+        entityId: departmentId,
+        description:
+            'Created department: ${_clean(department.name)} '
+            'in property ID ${department.propertyId}',
+      );
+
+      return departmentId;
     });
   }
 
@@ -246,38 +335,69 @@ class PropertyRepositoryImpl implements PropertyRepository {
   Future<void> updateDepartment(DepartmentEntity department) async {
     _requireText(department.name, 'Department name');
 
-    await _ensureUniqueDepartmentName(
-      department.propertyId,
-      department.name,
-      excludeId: department.id,
-    );
+    await db.transaction((txn) async {
+      await _ensureUniqueDepartmentName(
+        txn,
+        department.propertyId,
+        department.name,
+        excludeId: department.id,
+      );
 
-    final count = await db.update(
-      'departments',
-      {
-        'name': _clean(department.name),
-        'description': _clean(department.description),
-      },
-      where: 'id = ?',
-      whereArgs: [department.id],
-    );
+      final count = await txn.update(
+        'departments',
+        {
+          'name': _clean(department.name),
+          'description': _clean(department.description),
+        },
+        where: 'id = ?',
+        whereArgs: [department.id],
+      );
 
-    if (count == 0) {
-      throw StateError('Department was not found.');
-    }
+      if (count == 0) {
+        throw StateError('Department was not found.');
+      }
+
+      await _writeAudit(
+        txn,
+        action: 'UPDATE',
+        entityType: 'department',
+        entityId: department.id,
+        description: 'Updated department: ${_clean(department.name)}',
+      );
+    });
   }
 
   @override
   Future<void> deleteDepartment(int id) async {
-    final count = await db.delete(
-      'departments',
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+    await db.transaction((txn) async {
+      final rows = await txn.query(
+        'departments',
+        columns: ['name'],
+        where: 'id = ?',
+        whereArgs: [id],
+        limit: 1,
+      );
 
-    if (count == 0) {
-      throw StateError('Department was not found.');
-    }
+      final count = await txn.delete(
+        'departments',
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+
+      if (count == 0) {
+        throw StateError('Department was not found.');
+      }
+
+      final departmentName = rows.isNotEmpty ? rows.first['name'] : 'ID $id';
+
+      await _writeAudit(
+        txn,
+        action: 'DELETE',
+        entityType: 'department',
+        entityId: id,
+        description: 'Deleted department: $departmentName',
+      );
+    });
   }
 
   @override
@@ -294,29 +414,11 @@ class PropertyRepositoryImpl implements PropertyRepository {
 
   @override
   Future<int> addUnit(UnitEntity unit) async {
-    await _validateUnit(unit);
+    return db.transaction((txn) async {
+      await _validateUnit(txn, unit);
 
-    return db.insert('units', {
-      'property_id': unit.propertyId,
-      'department_id': unit.departmentId,
-      'unit_number': _clean(unit.number),
-      'unit_type': unit.type,
-      'floor_number': unit.floor,
-      'area': unit.area,
-      'monthly_rent': unit.rent,
-      'status': unit.status,
-      'description': _clean(unit.description),
-      'created_at': DateTime.now().toIso8601String(),
-    });
-  }
-
-  @override
-  Future<void> updateUnit(UnitEntity unit) async {
-    await _validateUnit(unit);
-
-    final count = await db.update(
-      'units',
-      {
+      final unitId = await txn.insert('units', {
+        'property_id': unit.propertyId,
         'department_id': unit.departmentId,
         'unit_number': _clean(unit.number),
         'unit_type': unit.type,
@@ -325,35 +427,107 @@ class PropertyRepositoryImpl implements PropertyRepository {
         'monthly_rent': unit.rent,
         'status': unit.status,
         'description': _clean(unit.description),
-        'updated_at': DateTime.now().toIso8601String(),
-      },
-      where: 'id = ?',
-      whereArgs: [unit.id],
-    );
+        'created_at': DateTime.now().toIso8601String(),
+      });
 
-    if (count == 0) {
+      await _writeAudit(
+        txn,
+        action: 'CREATE',
+        entityType: 'unit',
+        entityId: unitId,
+        description:
+            'Created unit ${_clean(unit.number)} '
+            'in property ID ${unit.propertyId}',
+      );
+
+      return unitId;
+    });
+  }
+
+  @override
+  Future<void> updateUnit(UnitEntity unit) async {
+    final unitId = unit.id;
+
+    if (unitId == null) {
       throw StateError('Unit was not found.');
     }
+
+    await db.transaction((txn) async {
+      await _validateUnit(txn, unit);
+
+      final count = await txn.update(
+        'units',
+        {
+          'department_id': unit.departmentId,
+          'unit_number': _clean(unit.number),
+          'unit_type': unit.type,
+          'floor_number': unit.floor,
+          'area': unit.area,
+          'monthly_rent': unit.rent,
+          'status': unit.status,
+          'description': _clean(unit.description),
+          'updated_at': DateTime.now().toIso8601String(),
+        },
+        where: 'id = ?',
+        whereArgs: [unitId],
+      );
+
+      if (count == 0) {
+        throw StateError('Unit was not found.');
+      }
+
+      await _writeAudit(
+        txn,
+        action: 'UPDATE',
+        entityType: 'unit',
+        entityId: unitId,
+        description: 'Updated unit: ${_clean(unit.number)}',
+      );
+    });
   }
 
   @override
   Future<void> deleteUnit(int id) async {
-    final contractRows = await db.query(
-      'contracts',
-      columns: ['id'],
-      where: 'unit_id = ?',
-      whereArgs: [id],
-      limit: 1,
-    );
+    await db.transaction((txn) async {
+      final unitRows = await txn.query(
+        'units',
+        columns: ['unit_number'],
+        where: 'id = ?',
+        whereArgs: [id],
+        limit: 1,
+      );
 
-    if (contractRows.isNotEmpty) {
-      throw StateError('This unit has contract history and cannot be deleted.');
-    }
+      final contractRows = await txn.query(
+        'contracts',
+        columns: ['id'],
+        where: 'unit_id = ?',
+        whereArgs: [id],
+        limit: 1,
+      );
 
-    final count = await db.delete('units', where: 'id = ?', whereArgs: [id]);
+      if (contractRows.isNotEmpty) {
+        throw StateError(
+          'This unit has contract history and cannot be deleted.',
+        );
+      }
 
-    if (count == 0) {
-      throw StateError('Unit was not found.');
-    }
+      final count = await txn.delete('units', where: 'id = ?', whereArgs: [id]);
+
+      if (count == 0) {
+        throw StateError('Unit was not found.');
+      }
+
+      final unitNumber = unitRows.isNotEmpty
+          ? unitRows.first['unit_number']
+          : 'ID $id';
+
+      await _writeAudit(
+        txn,
+        action: 'DELETE',
+        entityType: 'unit',
+        entityId: id,
+        description: 'Deleted unit: $unitNumber',
+      );
+    });
   }
 }
