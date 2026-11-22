@@ -507,6 +507,7 @@ class PropertyScreen extends GetView<PropertyController> {
         barrierDismissible: false,
       );
     } finally {
+      await WidgetsBinding.instance.endOfFrame;
       name.dispose();
       address.dispose();
       description.dispose();
@@ -565,6 +566,7 @@ class PropertyScreen extends GetView<PropertyController> {
         barrierDismissible: false,
       );
     } finally {
+      await WidgetsBinding.instance.endOfFrame;
       name.dispose();
       description.dispose();
     }
@@ -733,6 +735,7 @@ class PropertyScreen extends GetView<PropertyController> {
         barrierDismissible: false,
       );
     } finally {
+      await WidgetsBinding.instance.endOfFrame;
       number.dispose();
       floor.dispose();
       area.dispose();
@@ -774,11 +777,11 @@ class PropertyScreen extends GetView<PropertyController> {
         actions: [
           TextButton(
             onPressed: () => Get.back(result: false),
-            child: Text(_t('cancel')),
+            child: Text('cancel'.tr),
           ),
           FilledButton(
             onPressed: () => Get.back(result: true),
-            child: Text(_t('delete')),
+            child: Text('confirm'.tr),
           ),
         ],
       ),

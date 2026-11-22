@@ -14,6 +14,8 @@ import '../features/tenants_contracts/presentation/bindings/tenant_contract_bind
 import '../features/tenants_contracts/presentation/screens/tenant_contract_screen.dart';
 import '../features/services/presentation/bindings/services_binding.dart';
 import '../features/services/presentation/screens/services_screen.dart';
+import '../features/dues_payments/presentation/bindings/dues_payments_binding.dart';
+import '../features/dues_payments/presentation/screens/dues_payments_screen.dart';
 import 'app_routes.dart';
 
 class AppPages {
@@ -59,6 +61,11 @@ class AppPages {
       name: AppRoutes.services,
       page: () => const ServicesScreen(),
       binding: ServicesBinding(),
+    ),
+    GetPage(
+      name: AppRoutes.duesPayments,
+      page: () => const DuesPaymentsScreen(),
+      binding: DuesPaymentsBinding(),
     ),
   ];
 }

@@ -1,4 +1,4 @@
-﻿import 'package:get/get.dart';
+import 'package:get/get.dart';
 
 import '../../data/repositories/services_repository.dart';
 
@@ -65,6 +65,17 @@ class ServicesController extends GetxController {
     }
   }
 
+  Future<bool> activateService(int id) async {
+    try {
+      await repository.activateService(id);
+      await loadData();
+      return true;
+    } catch (error) {
+      Get.snackbar('Error'.tr, error.toString());
+      return false;
+    }
+  }
+
   Future<bool> assignService({
     required int contractId,
     required int serviceId,
@@ -84,12 +95,25 @@ class ServicesController extends GetxController {
     }
   }
 
-  Future<void> removeAssignment(int id) async {
+  Future<bool> removeAssignment(int id) async {
     try {
-      await repository.removeAssignment(id);
+      final removed = await repository.removeAssignment(id);
+
+      if (!removed) {
+        Get.snackbar('error'.tr, 'assignment_not_found'.tr);
+        return false;
+      }
+
       await loadData();
+      return true;
     } catch (error) {
-      Get.snackbar('Error'.tr, error.toString());
+      Get.snackbar(
+        'error'.tr,
+        'operation_failed'.trParams({
+          'error': error.toString().replaceFirst('Exception: ', ''),
+        }),
+      );
+      return false;
     }
   }
 

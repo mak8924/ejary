@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 
 import '../../domain/entities/tenant_entities.dart';
 import '../controllers/tenant_contract_controller.dart';
+import '../../../../routes/app_routes.dart';
 
 class TenantContractScreen extends GetView<TenantContractController> {
   const TenantContractScreen({super.key});
@@ -18,6 +19,13 @@ class TenantContractScreen extends GetView<TenantContractController> {
       child: Scaffold(
         appBar: AppBar(
           title: Text('tenants_contracts_title'.tr),
+          actions: [
+            IconButton(
+              tooltip: 'dues_payments_title'.tr,
+              icon: const Icon(Icons.payments_outlined),
+              onPressed: () => Get.toNamed(AppRoutes.duesPayments),
+            ),
+          ],
           bottom: TabBar(
             tabs: [
               Tab(
@@ -1006,7 +1014,7 @@ class TenantContractScreen extends GetView<TenantContractController> {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(dialogContext, true),
-            child: Text('delete'.tr),
+            child: Text('confirm'.tr),
           ),
         ],
       ),

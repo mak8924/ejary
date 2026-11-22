@@ -52,7 +52,6 @@ class ServicesRepository {
       'description': description.trim(),
       'default_amount': amount,
       'billing_period': billingPeriod,
-      'is_active': 1,
     };
 
     if (name.trim().isEmpty || !amount.isFinite || amount < 0) {
@@ -60,7 +59,7 @@ class ServicesRepository {
     }
 
     if (id == null) {
-      await db.insert('services', values);
+      await db.insert('services', {...values, 'is_active': 1});
     } else {
       final count = await db.update(
         'services',
@@ -77,6 +76,16 @@ class ServicesRepository {
     await db.update(
       'services',
       {'is_active': 0},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<void> activateService(int id) async {
+    final db = _db;
+    await db.update(
+      'services',
+      {'is_active': 1},
       where: 'id = ?',
       whereArgs: [id],
     );
@@ -145,25 +154,72 @@ class ServicesRepository {
     });
   }
 
-  Future<void> removeAssignment(int id) async {
+  Future<bool> removeAssignment(int id) async {
     final db = _db;
 
-    await db.transaction((txn) async {
+    return db.transaction<bool>((txn) async {
       final rows = await txn.query(
         'contract_services',
-        columns: ['contract_id'],
+        columns: ['contract_id', 'service_id'],
         where: 'id = ?',
         whereArgs: [id],
         limit: 1,
       );
 
-      if (rows.isEmpty) return;
+      if (rows.isEmpty) return false;
 
       final contractId = rows.first['contract_id'] as int;
+      final serviceId = rows.first['service_id'] as int;
 
-      await txn.delete('contract_services', where: 'id = ?', whereArgs: [id]);
+      final deleted = await txn.delete(
+        'contract_services',
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+
+      if (deleted == 0) return false;
+
+      await ContractServiceDuesSync.removeServiceDues(
+        txn,
+        contractId: contractId,
+        serviceId: serviceId,
+      );
 
       await ContractServiceDuesSync.sync(txn, contractId: contractId);
+      return true;
+    });
+  }
+
+  // Hard deletion is refused while any contract still references the service.
+  // Normal catalog lifecycle should use activateService/deactivateService.
+  Future<void> deleteService(int id) async {
+    final db = _db;
+
+    await db.transaction((txn) async {
+      final services = await txn.query(
+        'services',
+        columns: ['id'],
+        where: 'id = ?',
+        whereArgs: [id],
+        limit: 1,
+      );
+
+      if (services.isEmpty) {
+        throw Exception('service_not_found');
+      }
+
+      final links = await txn.rawQuery(
+        'SELECT COUNT(*) AS total FROM contract_services WHERE service_id = ?',
+        [id],
+      );
+
+      final linkedCount = (links.first['total'] as num).toInt();
+
+      if (linkedCount > 0) {
+        throw Exception('service_linked_cannot_delete');
+      }
+
+      await txn.delete('services', where: 'id = ?', whereArgs: [id]);
     });
   }
 }

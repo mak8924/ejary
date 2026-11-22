@@ -9,6 +9,38 @@ class ContractServiceDuesSync {
         '${date.day.toString().padLeft(2, '0')}';
   }
 
+  static Future<void> removeServiceDues(
+    Transaction txn, {
+    required int contractId,
+    required int serviceId,
+  }) async {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final todayText = _dateText(today);
+    final serviceMarker = '%[service:$serviceId]%';
+
+    final removable = await txn.rawQuery(
+      '''
+      SELECT d.id
+      FROM dues d
+      WHERE d.contract_id = ?
+        AND d.description LIKE ?
+        AND d.due_date > ?
+        AND LOWER(d.status) = 'unpaid'
+        AND NOT EXISTS (
+          SELECT 1
+          FROM payment_allocations pa
+          WHERE pa.due_id = d.id
+        )
+      ''',
+      [contractId, serviceMarker, todayText],
+    );
+
+    for (final row in removable) {
+      await txn.delete('dues', where: 'id = ?', whereArgs: [row['id']]);
+    }
+  }
+
   static Future<void> sync(Transaction txn, {required int contractId}) async {
     final contracts = await txn.query(
       'contracts',
